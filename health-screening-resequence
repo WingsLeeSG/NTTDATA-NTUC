@@ -1,122 +1,124 @@
 (function () {
-    const TARGET_PATH = "/sf/liveprofile";
-    const TARGET_HASH = "#/benefitsoverview/pp3EmployeeProfile";
-    const SESSION_FLAG = "resizeHealthScreeningDialog";
+  const TARGET_PATH = "/sf/liveprofile";
+  const TARGET_HASH = "#/benefitsoverview/pp3EmployeeProfile";
+  const SESSION_FLAG = "resizeHealthScreeningDialog";
 
-    function isTargetPage() {
-        return (
-            window.location.pathname.includes(TARGET_PATH) &&
-            window.location.hash.includes(TARGET_HASH)
-        );
+  function isTargetPage() {
+    return (
+      window.location.pathname.includes(TARGET_PATH) &&
+      window.location.hash.includes(TARGET_HASH)
+    );
+  }
+
+  function buildTargetUrl() {
+    const crb = new URLSearchParams(window.location.search).get("_s.crb") || "";
+    return (
+      window.location.origin +
+      TARGET_PATH +
+      "?_s.crb=" +
+      encodeURIComponent(crb) +
+      "&version=3" +
+      TARGET_HASH
+    );
+  }
+
+  function getDialogTitle(dialog) {
+    const labelledBy = dialog.getAttribute("aria-labelledby");
+
+    if (labelledBy) {
+      const candidates = [
+        document.getElementById(labelledBy + "-inner"),
+        document.getElementById(labelledBy)
+      ].filter(Boolean);
+
+      for (const el of candidates) {
+        const text = (el.textContent || "").trim();
+        if (text) return text;
+      }
     }
 
-    function buildTargetUrl() {
-        const crb = new URLSearchParams(window.location.search).get("_s.crb") || "";
-        return (
-            window.location.origin +
-            TARGET_PATH +
-            "?_s.crb=" +
-            encodeURIComponent(crb) +
-            "&version=3" +
-            TARGET_HASH
-        );
+    const fallback = dialog.querySelector(".sapMTitle, .sapMDialogTitle");
+    return fallback ? (fallback.textContent || "").trim() : "";
+  }
+
+  function resizeDialog(dialog) {
+    dialog.style.setProperty("width", "1200px", "important");
+    dialog.style.setProperty("max-width", "95vw", "important");
+    dialog.style.setProperty("height", "85vh", "important");
+    dialog.style.setProperty("max-height", "85vh", "important");
+    dialog.style.setProperty("min-width", "0", "important");
+
+    dialog
+      .querySelectorAll(".sapMDialogSection, .sapMDialogScrollCont, .sapMDialogScroll")
+      .forEach((el) => {
+        el.style.setProperty("max-height", "calc(85vh - 3rem)", "important");
+        el.style.setProperty("overflow", "auto", "important");
+      });
+
+    dialog.dataset.healthScreeningResized = "1";
+  }
+
+  function findTargetDialog() {
+    const dialogs = document.querySelectorAll(
+      '.sapMDialog[role="dialog"][data-sap-ui-popup], .sapMDialog[role="dialog"], .sapMDialog'
+    );
+
+    for (const dialog of dialogs) {
+      const title = getDialogTitle(dialog);
+      if (title === "Health Screening Details") {
+        return dialog;
+      }
     }
 
-    function getDialogTitle(dialog) {
-        const labelledBy = dialog.getAttribute("aria-labelledby");
+    return null;
+  }
 
-        if (labelledBy) {
-            const candidates = [
-                document.getElementById(labelledBy + "-inner"),
-                document.getElementById(labelledBy)
-            ].filter(Boolean);
+  function startDialogObserver() {
+    const applyResize = () => {
+      const dialog = findTargetDialog();
+      if (!dialog) return false;
 
-            for (const el of candidates) {
-                const text = (el.textContent || "").trim();
-                if (text) return text;
-            }
-        }
+      if (dialog.dataset.healthScreeningResized === "1") return true;
 
-        const fallback = dialog.querySelector(".sapMTitle, .sapMDialogTitle");
-        return fallback ? (fallback.textContent || "").trim() : "";
+      resizeDialog(dialog);
+      sessionStorage.removeItem(SESSION_FLAG);
+      return true;
+    };
+
+    if (applyResize()) return;
+
+    const observer = new MutationObserver(() => {
+      if (applyResize()) {
+        observer.disconnect();
+      }
+    });
+
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true });
+    } else {
+      window.addEventListener(
+        "DOMContentLoaded",
+        () => observer.observe(document.body, { childList: true, subtree: true }),
+        { once: true }
+      );
     }
 
-    function resizeDialog(dialog) {
-        dialog.style.setProperty("width", "1200px", "important");
-        dialog.style.setProperty("max-width", "95vw", "important");
-        dialog.style.setProperty("height", "85vh", "important");
-        dialog.style.setProperty("max-height", "85vh", "important");
-        dialog.style.setProperty("min-width", "0", "important");
+    window.addEventListener(
+      "beforeunload",
+      () => observer.disconnect(),
+      { once: true }
+    );
+  }
 
-        dialog
-            .querySelectorAll(".sapMDialogSection, .sapMDialogScrollCont, .sapMDialogScroll")
-            .forEach((el) => {
-                el.style.setProperty("max-height", "calc(85vh - 3rem)", "important");
-                el.style.setProperty("overflow", "auto", "important");
-            });
+  if (!isTargetPage()) {
+    sessionStorage.setItem(SESSION_FLAG, "1");
+    window.top.location.replace(buildTargetUrl());
+    return;
+  }
 
-        dialog.dataset.healthScreeningResized = "1";
-    }
+  if (sessionStorage.getItem(SESSION_FLAG) !== "1") {
+    return;
+  }
 
-    function findTargetDialog() {
-        const dialogs = document.querySelectorAll(
-            '.sapMDialog[role="dialog"][data-sap-ui-popup], .sapMDialog[role="dialog"], .sapMDialog'
-        );
-
-        for (const dialog of dialogs) {
-            const title = getDialogTitle(dialog);
-            if (title === "Health Screening Details") {
-                return dialog;
-            }
-        }
-
-        return null;
-    }
-
-    function startDialogObserver() {
-        const applyResize = () => {
-            const dialog = findTargetDialog();
-            if (!dialog) return;
-
-            if (dialog.dataset.healthScreeningResized === "1") return;
-            resizeDialog(dialog);
-        };
-
-        applyResize();
-
-        const observer = new MutationObserver(() => {
-            applyResize();
-        });
-
-        if (document.body) {
-            observer.observe(document.body, { childList: true, subtree: true });
-        } else {
-            window.addEventListener(
-                "DOMContentLoaded",
-                () => observer.observe(document.body, { childList: true, subtree: true }),
-                { once: true }
-            );
-        }
-
-        window.addEventListener(
-            "beforeunload",
-            () => {
-                observer.disconnect();
-            },
-            { once: true }
-        );
-    }
-
-    if (!isTargetPage()) {
-        sessionStorage.setItem(SESSION_FLAG, "1");
-        window.top.location.replace(buildTargetUrl());
-        return;
-    }
-
-    if (sessionStorage.getItem(SESSION_FLAG) !== "1") {
-        return;
-    }
-
-    sessionStorage.removeItem(SESSION_FLAG);
-    startDialogObserver();
+  startDialogObserver();
 })();
